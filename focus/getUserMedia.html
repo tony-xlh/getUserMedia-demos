@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Camera Focus Demo</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=0" />
+  <style>
+    #container {
+      height: 480px;
+      width: 100%;
+      background: lightgray;
+      position: relative;
+    }
+
+    video {
+      position: absolute;
+      height: 100%;
+      width: 100%;
+      left:0;
+      top:0;
+      object-fit: contain;
+    }
+
+    button {
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <h2>Camera Focus Demo</h2>
+  <label>
+    Camera:
+    <select id="select-camera"></select>
+  </label>
+  <label>
+    Resolution:
+    <select id="select-resolution">
+      <option value="640x480">640x480</option>
+      <option value="1280x720">1280x720</option>
+      <option value="1920x1080" selected>1920x1080</option>
+      <option value="3840x2160">3840x2160</option>
+    </select>
+  </label>
+  <br/>
+  <label>
+    Mode:
+    <select id="select-mode">
+      <option value="manual" selected>manual</option>
+      <option value="continuous">continuous</option>
+    </select>
+  </label>
+  <br/>
+  <label>
+    <span>Focus distance<span id="range"></span>:</span>
+    <span id="distance"></span>
+  </label>
+  <br/>
+  <button onclick="changeDistance(false)">-</button>
+  <button onclick="changeDistance(true)">+</button>
+  <button onclick="startCamera();">Start Camera</button>
+  <br/>
+  <div id="container">
+    <video id="video" muted autoplay="autoplay" playsinline="playsinline" webkit-playsinline></video>
+    <canvas></canvas>
+  </div>
+  <script type="text/javascript">
+    let cameras = [];
+    let track;
+    let step = 0.5;
+    let currentDistance = 0;
+    let min = 0;
+    let max = 3;
+    window.onload = async function(){
+      checkBrowserCapabilities();
+      await requestCameraPermission();
+      await listCameras();
+      registerEvents();
+    }
+
+    async function requestCameraPermission() {
+      try {
+        const constraints = {video: true, audio: false};
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        closeStream(stream);
+      } catch (error) {
+        console.log(error);
+        throw error;
+      }
+    }
+
+    function closeStream(stream){
+      if (stream) {
+        const tracks = stream.getTracks();
+        for (let i=0;i<tracks.length;i++) {
+          const track = tracks[i];
+          track.stop();  // stop the opened tracks
+        }
+      }
+    }
+
+    async function startCamera(){
+      let selectedCamera = cameras[document.getElementById("select-camera").selectedIndex];
+      closeStream(document.getElementById("video").srcObject);
+      let selectedResolution = document.getElementById("select-resolution").selectedOptions[0].value;
+      let width = parseInt(selectedResolution.split("x")[0]);
+      let height = parseInt(selectedResolution.split("x")[1]);
+      
+      const videoConstraints = {
+        video: {width:width, height:height, deviceId: selectedCamera.deviceId}, 
+        audio: false
+      };
+      try {
+        const cameraStream = await navigator.mediaDevices.getUserMedia(videoConstraints);
+        document.getElementById("video").srcObject = cameraStream;
+        checkCameraCapabilities();
+      } catch (error) {
+        alert(error);
+      }
+    }
+
+    async function listCameras(){
+      let cameraSelect = document.getElementById("select-camera");
+      let allDevices = await navigator.mediaDevices.enumerateDevices();
+      for (let i = 0; i < allDevices.length; i++){
+        let device = allDevices[i];
+        if (device.kind == 'videoinput'){
+          cameras.push(device);
+          cameraSelect.appendChild(new Option(device.label,device.deviceId));
+        }
+      }
+    }
+
+    function registerEvents(){
+      console.log("registerEvents");
+      const container = document.getElementById("container");
+    }
+
+    async function focus(x,y){
+      const video = document.querySelector('video');
+      x = video.videoWidth * x;
+      y = video.videoHeight * y;
+
+      let mode = document.getElementById("select-mode").selectedOptions[0].value;
+      //https://developer.mozilla.org/en-US/docs/Web/API/MediaTrackConstraints
+      const constraints = {advanced: [{
+        focusMode: mode
+      }]};
+      console.log(constraints);
+      await track.applyConstraints(constraints);
+    }
+
+    function checkBrowserCapabilities(){
+      if (navigator.mediaDevices.getSupportedConstraints().focusMode) {
+        console.log("The browser supports focus");
+      }else{
+        alert("The browser does not support focus.");
+      }
+    }
+
+    function checkCameraCapabilities(){
+      const video = document.querySelector("video");
+      const videoTracks = video.srcObject.getVideoTracks();
+      track = videoTracks[0];
+      let capabilities = track.getCapabilities();
+      console.log(capabilities);
+      if (!('focusMode' in capabilities)) {
+        alert("This camera does not support focus");
+      }else{
+        if (!('focusDistance' in capabilities)) {
+          alert("This camera does not control focus distance");
+        }else{
+          loadFocusDistanceRange(capabilities);
+        }
+      }
+    }
+
+    function loadFocusDistanceRange(cap){
+      step = cap.focusDistance.step;
+      min = cap.focusDistance.min;
+      max = cap.focusDistance.max;
+      let range = document.getElementById("range");
+      range.innerText = "(" + min + "-" + max + ")";
+      currentDistance = track.getSettings().focusDistance;
+      document.getElementById("distance").innerText = currentDistance;
+    }
+
+    async function changeDistance(increase){
+      let mode = document.getElementById("select-mode").selectedOptions[0].value;
+      //https://developer.mozilla.org/en-US/docs/Web/API/MediaTrackConstraints
+      if (increase) {
+        currentDistance = currentDistance + step;
+      }else{
+        currentDistance = currentDistance - step;
+      }
+      currentDistance = Math.min(currentDistance,max);
+      currentDistance = Math.max(currentDistance,min);
+      const constraints = {advanced: [{
+        focusMode: mode,
+        focusDistance: currentDistance,
+      }]};
+      console.log(constraints);
+      await track.applyConstraints(constraints);
+      document.getElementById("distance").innerText = currentDistance;
+    }
+  </script>
+</body>
+</html>

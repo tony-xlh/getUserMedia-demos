@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Camera Focus Demo</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=0" />
+  <style>
+    #container {
+      height: 480px;
+      width: 100%;
+      background: lightgray;
+      position: relative;
+    }
+
+    video {
+      position: absolute;
+      height: 100%;
+      width: 100%;
+      left:0;
+      top:0;
+      object-fit: contain;
+    }
+
+    canvas {
+      position: absolute;
+      height: 100%;
+      width: 100%;
+      left:0;
+      top:0;
+      object-fit: contain;
+    }
+  </style>
+</head>
+<body>
+  <h2>Camera Focus Demo</h2>
+  <label>
+    Camera:
+    <select id="select-camera"></select>
+  </label>
+  <label>
+    Resolution:
+    <select id="select-resolution">
+      <option value="640x480">640x480</option>
+      <option value="1280x720">1280x720</option>
+      <option value="1920x1080" selected>1920x1080</option>
+      <option value="3840x2160">3840x2160</option>
+    </select>
+  </label>
+  <label>
+    Mode:
+    <select id="select-mode">
+      <option value="manual" selected>manual</option>
+      <option value="continuous">continuous</option>
+    </select>
+  </label>
+  <button onclick="startCamera();">Start Camera</button>
+  <br/>
+  <div id="container">
+    <video id="video" muted autoplay="autoplay" playsinline="playsinline" webkit-playsinline></video>
+    <canvas></canvas>
+  </div>
+  <script type="text/javascript">
+    let cameras = [];
+    let track;
+    window.onload = async function(){
+      checkBrowserCapabilities();
+      await requestCameraPermission();
+      await listCameras();
+      registerEvents();
+    }
+
+    async function requestCameraPermission() {
+      try {
+        const constraints = {video: true, audio: false};
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        closeStream(stream);
+      } catch (error) {
+        console.log(error);
+        throw error;
+      }
+    }
+
+    function closeStream(stream){
+      if (stream) {
+        const tracks = stream.getTracks();
+        for (let i=0;i<tracks.length;i++) {
+          const track = tracks[i];
+          track.stop();  // stop the opened tracks
+        }
+      }
+    }
+
+    async function startCamera(){
+      let selectedCamera = cameras[document.getElementById("select-camera").selectedIndex];
+      closeStream(document.getElementById("video").srcObject);
+      let selectedResolution = document.getElementById("select-resolution").selectedOptions[0].value;
+      let width = parseInt(selectedResolution.split("x")[0]);
+      let height = parseInt(selectedResolution.split("x")[1]);
+      
+      const videoConstraints = {
+        video: {width:width, height:height, deviceId: selectedCamera.deviceId}, 
+        audio: false
+      };
+      try {
+        const cameraStream = await navigator.mediaDevices.getUserMedia(videoConstraints);
+        document.getElementById("video").srcObject = cameraStream;
+        checkCameraCapabilities();
+      } catch (error) {
+        alert(error);
+      }
+    }
+
+    async function listCameras(){
+      let cameraSelect = document.getElementById("select-camera");
+      let allDevices = await navigator.mediaDevices.enumerateDevices();
+      for (let i = 0; i < allDevices.length; i++){
+        let device = allDevices[i];
+        if (device.kind == 'videoinput'){
+          cameras.push(device);
+          cameraSelect.appendChild(new Option(device.label,device.deviceId));
+        }
+      }
+    }
+
+    function registerEvents(){
+      console.log("registerEvents");
+      const container = document.getElementById("container");
+      container.addEventListener("click",function(e){
+        console.log(e);
+        let {offsetX,offsetY} = calculateOffset();
+        let x = (e.offsetX - offsetX)/(container.offsetWidth - offsetX * 2);
+        let y = (e.offsetY - offsetY)/(container.offsetHeight - offsetY * 2);
+        console.log(x);
+        console.log(y);
+        focus(x,y);
+      })
+    }
+
+    async function focus(x,y){
+      const video = document.querySelector('video');
+      x = video.videoWidth * x;
+      y = video.videoHeight * y;
+      const top = parseInt((y - 25) / video.videoHeight * 100) + "%";
+      const bottom = parseInt((y + 25) / video.videoHeight * 100) + "%";
+      const left = parseInt((x - 25) / video.videoWidth * 100) + "%";
+      const right = parseInt((x + 25) / video.videoWidth * 100) + "%";
+      const canvas = document.querySelector('canvas');
+      const ctx = canvas.getContext("2d");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.beginPath();
+      ctx.lineWidth = "5";
+      ctx.strokeStyle = "red";
+      ctx.rect(x - 25, y - 25, 50, 50);
+      ctx.stroke();
+      let mode = document.getElementById("select-mode").selectedOptions[0].value;
+      //https://developer.mozilla.org/en-US/docs/Web/API/MediaTrackConstraints
+      const constraints = {advanced: [{
+        focusMode: mode,
+        locate: true,
+        area: { // defines rectangle of the detection/localization area
+          top: top,   // top offset
+          right: right,  // right offset
+          left: left,   // left offset
+          bottom: bottom  // bottom offset
+        }
+      }]};
+      console.log(constraints);
+      await track.applyConstraints(constraints);
+      setTimeout(function(){
+        canvas.width = video.videoWidth; //clear canvas;
+      },2000);
+    }
+
+    function calculateOffset(){
+      const video = document.querySelector('video');
+      let containerWidth = video.offsetWidth;
+      let containerHeight = video.offsetHeight;
+      let videoWidth = video.videoWidth;
+      let videoHeight = video.videoHeight;
+      let containerRatio = containerWidth/containerHeight;
+      let videoRatio = videoWidth/videoHeight;
+      let offsetX = 0;
+      let offsetY = 0;
+      if (containerRatio > videoRatio) { //has offset in horizontal direction
+        let displayRatio = containerHeight/videoHeight;
+        let displayWidth = displayRatio * videoWidth;
+        offsetX = (containerWidth - displayWidth) /2
+      }else{  //has offset in vertical direction
+        let displayRatio = containerWidth/videoWidth;
+        let displayHeight = displayRatio * videoHeight;
+        offsetY = (containerHeight - displayHeight) /2
+      }
+      return {offsetX:offsetX, offsetY:offsetY};
+    }
+
+    function checkBrowserCapabilities(){
+      if (navigator.mediaDevices.getSupportedConstraints().focusMode) {
+        console.log("The browser supports focus");
+      }else{
+        alert("The browser does not support focus.");
+      }
+    }
+
+    function checkCameraCapabilities(){
+      const video = document.querySelector("video");
+      const videoTracks = video.srcObject.getVideoTracks();
+      track = videoTracks[0];
+      let capabilities = track.getCapabilities();
+      console.log(capabilities);
+      if (!('focusMode' in capabilities)) {
+        alert("This camera does not support focus");
+      }
+    }
+  </script>
+</body>
+</html>
