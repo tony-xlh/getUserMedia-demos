@@ -92,6 +92,15 @@
             isMeasuredInPercentage: false
         }));
       drawingLayer.addDrawingItems(drawingItems);
+      cameraEnhancer.setFocus({
+          mode: "manual",
+          area: {
+            centerPoint: {
+                x: (x-25) + "px",
+                y: (y-25) + "px",
+            }
+          }
+      });
       setTimeout(function(){
         drawingLayer.clearDrawingItems();
       },2000)
