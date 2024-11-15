@@ -50,12 +50,10 @@
   </label>
   <br/>
   <label>
-    <span>Focus distance<span id="range"></span>:</span>
-    <span id="distance"></span>
+    Focus distance:
+    <input type="range" id="distance" min="0" max="3" value="0" step="0" onchange="changeDistance()"/>
   </label>
   <br/>
-  <button onclick="changeDistance(false)">-</button>
-  <button onclick="changeDistance(true)">+</button>
   <button onclick="startCamera();">Start Camera</button>
   <br/>
   <div id="container">
@@ -66,9 +64,6 @@
     let cameras = [];
     let track;
     let step = 0.5;
-    let currentDistance = 0;
-    let min = 0;
-    let max = 3;
     window.onload = async function(){
       checkBrowserCapabilities();
       await requestCameraPermission();
@@ -177,29 +172,24 @@
       step = cap.focusDistance.step;
       min = cap.focusDistance.min;
       max = cap.focusDistance.max;
-      let range = document.getElementById("range");
-      range.innerText = "(" + min + "-" + max + ")";
       currentDistance = track.getSettings().focusDistance;
-      document.getElementById("distance").innerText = currentDistance;
+      let range = document.getElementById("distance");
+      range.value = currentDistance;
+      range.min = min;
+      range.max = max;
+      range.step = step;
     }
 
-    async function changeDistance(increase){
+    async function changeDistance(){
       let mode = document.getElementById("select-mode").selectedOptions[0].value;
       //https://developer.mozilla.org/en-US/docs/Web/API/MediaTrackConstraints
-      if (increase) {
-        currentDistance = currentDistance + step;
-      }else{
-        currentDistance = currentDistance - step;
-      }
-      currentDistance = Math.min(currentDistance,max);
-      currentDistance = Math.max(currentDistance,min);
+      currentDistance = document.getElementById("distance").value;
       const constraints = {advanced: [{
         focusMode: mode,
         focusDistance: currentDistance,
       }]};
       console.log(constraints);
       await track.applyConstraints(constraints);
-      document.getElementById("distance").innerText = currentDistance;
     }
   </script>
 </body>
