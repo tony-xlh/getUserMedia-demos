@@ -27,6 +27,13 @@
       <option value="3840x2160">3840x2160</option>
     </select>
   </label>
+  <label>
+    Mode:
+    <select id="select-mode">
+      <option value="manual" selected>manual</option>
+      <option value="continuous">continuous</option>
+    </select>
+  </label>
   <button onclick="startCamera();">Start Camera</button>
   <br/>
   <div id="enhancerUIContainer"></div>
@@ -92,8 +99,9 @@
             isMeasuredInPercentage: false
         }));
       drawingLayer.addDrawingItems(drawingItems);
+      let mode = document.getElementById("select-mode").selectedOptions[0].value;
       cameraEnhancer.setFocus({
-          mode: "manual",
+          mode: mode,
           area: {
             centerPoint: {
                 x: (x-25) + "px",
